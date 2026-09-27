@@ -1,4 +1,4 @@
-HTML<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -444,6 +444,25 @@ HTML<!DOCTYPE html>
         }
       };
 
+      // リセット処理
+      const handleReset = () => {
+        if (window.confirm("学習履歴をリセットして最初の画面に戻りますか？")) {
+          localStorage.removeItem('binaryAppProgress');
+          setProgress({
+            xp: 0,
+            baseXp: 0,
+            bonusXp: 0,
+            currentSectionIndex: 0,
+            completedQuizzes: [],
+            completedSections: [],
+            userName: '',
+            sectionStats: {}
+          });
+          setCombo(0);
+          window.scrollTo(0, 0);
+        }
+      };
+
       const handleDownloadImage = async () => {
         const element = document.getElementById('certificate-area');
         if (!element) return;
@@ -669,12 +688,20 @@ HTML<!DOCTYPE html>
                        </div>
                      </div>
 
-                     <button 
-                       onClick={handleDownloadImage}
-                       className="no-print mt-2 inline-flex items-center justify-center px-6 py-3 font-bold font-mono tracking-widest text-slate-900 transition-all duration-200 bg-amber-500 rounded-lg hover:bg-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.6)] w-full sm:w-auto mx-auto gap-2"
-                     >
-                       <span>🖼️ 画像として保存する</span>
-                     </button>
+                     <div className="flex flex-col sm:flex-row gap-4 justify-center mt-2 no-print">
+                       <button 
+                         onClick={handleDownloadImage}
+                         className="inline-flex items-center justify-center px-6 py-3 font-bold font-mono tracking-widest text-slate-900 transition-all duration-200 bg-amber-500 rounded-lg hover:bg-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.6)] w-full sm:w-auto gap-2"
+                       >
+                         <span>🖼️ 画像として保存する</span>
+                       </button>
+                       <button 
+                         onClick={handleReset}
+                         className="inline-flex items-center justify-center px-6 py-3 font-bold font-mono tracking-widest text-slate-400 transition-all duration-200 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:text-slate-200 w-full sm:w-auto gap-2"
+                       >
+                         <span>🔄 最初からやり直す</span>
+                       </button>
+                     </div>
                    </div>
                  )}
                </div>
