@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+HTML<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -15,8 +15,11 @@
   <!-- Babel (ブラウザ上でReactのJSXを変換するため) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- html2canvas (HTMLを画像化するためのライブラリ) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
   <style>
-    /* 印刷・PDF保存用のスタイル（白背景にリセット） */
+    /* 印刷用のスタイル（Ctrl+Pなどで印刷された時用の保険） */
     @media print {
       body * { visibility: hidden; }
       #certificate-area, #certificate-area * { visibility: visible; color: #1e293b !important; }
@@ -441,6 +444,29 @@
         }
       };
 
+      const handleDownloadImage = async () => {
+        const element = document.getElementById('certificate-area');
+        if (!element) return;
+        
+        // 画像化する際、保存ボタン自体が画像に写り込まないようにする設定
+        try {
+          const canvas = await window.html2canvas(element, {
+            scale: 2, // 高画質化
+            backgroundColor: '#0f172a', // Tailwindのslate-900の色
+            ignoreElements: (node) => node.classList && node.classList.contains('no-print') // ボタンを除外
+          });
+          
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          const link = document.createElement('a');
+          link.download = `${progress.userName || 'student'}_certificate.jpg`;
+          link.href = dataUrl;
+          link.click();
+        } catch (error) {
+          console.error("画像の保存に失敗しました", error);
+          alert("画像の保存に失敗しました。");
+        }
+      };
+
       const level = Math.floor(progress.xp / 100) + 1;
       const xpToNext = 100 - (progress.xp % 100);
       const progressPercent = ((progress.xp % 100) / 100) * 100;
@@ -644,10 +670,10 @@
                      </div>
 
                      <button 
-                       onClick={() => window.print()}
+                       onClick={handleDownloadImage}
                        className="no-print mt-2 inline-flex items-center justify-center px-6 py-3 font-bold font-mono tracking-widest text-slate-900 transition-all duration-200 bg-amber-500 rounded-lg hover:bg-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.6)] w-full sm:w-auto mx-auto gap-2"
                      >
-                       <span>📄 PDFで保存・印刷する</span>
+                       <span>🖼️ 画像として保存する</span>
                      </button>
                    </div>
                  )}
