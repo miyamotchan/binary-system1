@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>2進法計算マスター</title>
+    <!-- React, ReactDOM, Babel, TailwindCSS の読み込み -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'binary-learning-app';
+const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let app, auth, db;
+if (firebaseConfigStr) {
+  try {
+    const firebaseConfig = JSON.parse(firebaseConfigStr);
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) {
+    console.error("Firebase initialization error:", e);
+  }
+}
+
+// クールなAI/サイバー教官風の先生アイコン
+const SenseiIcon = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">
+    <polygon points="50,5 95,25 95,75 50,95 5,75 5,25" fill="#0f172a" stroke="#06b6d4" strokeWidth="3"/>
+    {/* サイバーバイザー */}
+    <rect x="25" y="40" width="50" height="16" rx="3" fill="#06b6d4" opacity="0.9"/>
+    <path d="M 30 48 L 70 48" stroke="#fff" strokeWidth="2" opacity="0.8"/>
+    {/* 口元のモジュール */}
+    <line x1="40" y1="70" x2="60" y2="70" stroke="#06b6d4" strokeWidth="3" strokeLinecap="round"/>
+    <circle cx="50" cy="70" r="1.5" fill="#fff"/>
+  </svg>
+);
+
+// クールなハッカー/サイバースチューデント風のメイちゃんアイコン
+const MeiIcon = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]">
+    <polygon points="50,5 95,25 95,75 50,95 5,75 5,25" fill="#0f172a" stroke="#d946ef" strokeWidth="3"/>
+    {/* ヘッドセット / ネオンヘア */}
+    <path d="M 15 50 C 15 15, 85 15, 85 50" fill="none" stroke="#d946ef" strokeWidth="5"/>
+    <circle cx="15" cy="55" r="8" fill="#d946ef"/>
+    <circle cx="85" cy="55" r="8" fill="#d946ef"/>
+    {/* シャープなバイザー */}
+    <polygon points="28,45 72,45 65,58 35,58" fill="#f0abfc" opacity="0.9"/>
+    {/* 口元 */}
+    <path d="M 45 72 Q 50 77 55 72" stroke="#f0abfc" strokeWidth="2" fill="none" strokeLinecap="round"/>
+  </svg>
+);
+
+const UserAvatar = ({ level }) => (
+  <div className="relative">
+    <div className="w-10 h-10 rounded-sm bg-slate-800 flex items-center justify-center text-cyan-400 font-black text-lg border border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)] transform rotate-45">
+      <span className="transform -rotate-45">{level}</span>
+    </div>
+    <div className="absolute -bottom-2 -right-2 bg-slate-900 text-[10px] font-bold px-1.5 py-0.5 rounded text-cyan-400 border border-cyan-500 shadow-[0_0_5px_rgba(6,182,212,0.5)] z-10">Lv</div>
+  </div>
+);
+
+const COURSE_DATA = [
+  {
+    id: 'intro',
+    title: '導入：2進法の世界へ',
+    dialogs: [
+      { speaker: '先生', text: 'みなさん、こんにちは。今回は「2進法の計算」について学んでいきましょう。' },
+      { speaker: 'メイ', text: '先生、よろしくお願いします！2進法って難しそう...私の脳細胞が「0」と「1」でショートしちゃいそうです。' },
+      { speaker: '先生', text: '大丈夫ですよ。基本は私たちが普段使っている10進法の筆算と同じです。順を追っていけばパズルのように解けますから、一緒に頑張りましょう！' }
+    ],
+    quizzes: []
+  },
+  {
+    id: 'sec1',
+    title: '1. 2進法の加算（たし算）',
+    dialogs: [
+      { speaker: '先生', text: 'まずはたし算です。1+1はいくつになりますか？' },
+      { speaker: 'メイ', text: 'ズバリ、2ですよね！' },
+      { speaker: '先生', text: '10進法なら正解です。しかし2進法には「0」と「1」しかないので、1+1は「10(いちぜろ)」に桁上がりするんです。' },
+      { speaker: 'メイ', text: 'ええっ！？ 1+1が10！？ 急に10倍になったみたいで得した気分です！' },
+      { speaker: '先生', text: '価値としては10進法の2と同じですよ。それでは、実際に計算してみましょう。右の桁から順に足していくのがポイントです。' }
+    ],
+    quizzes: [
+      { id: 'q1-1', q: '0100 + 0001', a: '0101', hint: '右から順に足してね！ 0+1=1, 次は0+0=0だよ。' },
+      { id: 'q1-2', q: '0101 + 1001', a: '1110', hint: '右端は 1+1。2進法では「10」になるから、0を書いて1つ上の桁に1を繰り上げよう！' },
+      { id: 'q1-3', q: '1010 + 0011', a: '1101', hint: '繰り上がりがないから、落ち着いてそのまま足し算すれば大丈夫！' },
+      { id: 'q1-4', q: '1101 + 1110', a: '11011', hint: '繰り上がりが連続するよ。最後は桁が1つ増えて5桁になるから気をつけてね！' }
+    ]
+  },
+  {
+    id: 'sec2',
+    title: '2. 補数とは？',
+    dialogs: [
+      { speaker: '先生', text: '次はコンピュータの計算でとても重要な「補数」について学びます。' },
+      { speaker: '先生', text: '補数とは「ある数に足して、桁が1つ上がる数のうち、最も小さな数」のことです。' },
+      { speaker: 'メイ', text: 'えっと...足し算して桁を上げるための引き算をするってことですか？大変そう...' },
+      { speaker: '先生', text: '実は、とても便利な「裏ワザ」があるんです。元の2進数の「0」と「1」をすべて反転させて、そこに「1」を足すだけで機械的に求められます！' },
+      { speaker: 'メイ', text: '反転させて、1を足すだけ！？ それなら一瞬でできそうです！' }
+    ],
+    quizzes: [
+      { id: 'q2-1', q: '0010 の補数を求めよ(4桁)', a: '1110', hint: '0と1を反転させると「1101」。それに1を足してみよう！' },
+      { id: 'q2-2', q: '0110 の補数を求めよ(4桁)', a: '1010', hint: '反転させると「1001」。これに1を足すと...?' },
+      { id: 'q2-3', q: '1001 の補数を求めよ(4桁)', a: '0111', hint: '反転させると「0110」。1を足してね！' },
+      { id: 'q2-4', q: '1011 の補数を求めよ(4桁)', a: '0101', hint: '反転させると「0100」。これに1を足せばOK！' }
+    ]
+  },
+  {
+    id: 'sec3',
+    title: '3. 補数を使った減算（ひき算）',
+    dialogs: [
+      { speaker: 'メイ', text: '先生、そもそもなぜ「補数」なんてややこしいものを使うんですか？' },
+      { speaker: '先生', text: '鋭いですね！実は、コンピュータは引き算を「補数を使った足し算」で行っているからなんです。' },
+      { speaker: 'メイ', text: 'ええっ！？ たし算でひき算ができるんですか？ まるで魔法ですね！' },
+      { speaker: '先生', text: 'はい。引く数の「補数」を求めて元の数に足します。そして、あらかじめ決めた桁数（今回は4桁）から【はみ出した左端の桁】を無視すれば、引き算の答えになります！' }
+    ],
+    quizzes: [
+      { id: 'q3-1', q: '1010 - 0100 (4桁で計算)', a: '0110', hint: 'まず0100の補数(1100)を求める。1010+1100=10110。一番左のはみ出た1を無視しよう！' },
+      { id: 'q3-2', q: '1011 - 0100 (4桁で計算)', a: '0111', hint: '引く数0100の補数は1100。1011+1100=10111。左端の1を消してね！' },
+      { id: 'q3-3', q: '1100 - 1001 (4桁で計算)', a: '0011', hint: '引く数1001の補数は0111。1100+0111=10011。はみ出た1を無視！' },
+      { id: 'q3-4', q: '1110 - 0111 (4桁で計算)', a: '0111', hint: '引く数0111の補数は1001。1110+1001=10111。左端の1を無視！' }
+    ]
+  },
+  {
+    id: 'sec4',
+    title: '4. 負の数の表現',
+    dialogs: [
+      { speaker: '先生', text: '最後に、マイナス（負の数）の表現です。一番左端の1ビットを「符号ビット」として使います。' },
+      { speaker: 'メイ', text: '左端が「0」ならプラス、「1」ならマイナスって約束するんですよね。' },
+      { speaker: '先生', text: 'その通り！そして負の数（左端が1）の場合は、もう一度「補数」を求めると、絶対値（大きさ）が分かります。最後にマイナスをつければ10進数に直せますよ。' },
+      { speaker: 'メイ', text: '負の数は補数の仮面をかぶって隠れていたんですね。探偵みたいで面白いです！' }
+    ],
+    quizzes: [
+      { id: 'q4-1', q: '0101 を10進法で表せ (4桁,左端は符号)', a: '5', hint: '左端が0だからプラス！残りの「101」を10進数に直そう。4+1=5だよ。' },
+      { id: 'q4-2', q: '1011 を10進法で表せ (4桁,左端は符号)', a: '-5', hint: '左端が1だからマイナス！「1011」の補数を求めると0101(5)。だからマイナスをつけて-5だね。' },
+      { id: 'q4-3', q: '00110 を10進法で表せ (5桁,左端は符号)', a: '6', hint: '左端が0だからプラス。「0110」は 4+2=6 だね。' },
+      { id: 'q4-4', q: '11001 を10進法で表せ (5桁,左端は符号)', a: '-7', hint: '左端が1だからマイナス。「11001」の補数を求めると00111(7)。だから-7だよ！' }
+    ]
+  },
+  {
+    id: 'sec5',
+    title: 'クリア！',
+    dialogs: [
+      { speaker: '先生', text: 'お疲れ様でした！これで2進法の計算の基礎はバッチリですね。' },
+      { speaker: 'メイ', text: '最初は難しそうだと思ったけど、仕組みを知るとすごく合理的で面白かったです！' },
+      { speaker: '先生', text: '素晴らしいです。桁あふれ（シフト演算）など、まだまだ面白い技術があるので、これからも一緒に学んでいきましょう！' }
+    ],
+    quizzes: []
+  }
+];
+
+const QuizItem = ({ quiz, isCompleted, isUnlocked, onCorrect, onIncorrect, combo }) => {
+  const [input, setInput] = useState('');
+  const [error, setError] = useState(false);
+  const [showHint, setShowHint] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    
+    if (input.trim() === quiz.a) {
+      setError(false);
+      onCorrect();
+    } else {
+      setError(true);
+      onIncorrect();
+      setTimeout(() => setError(false), 600);
+    }
+  };
+
+  if (!isUnlocked) {
+    return (
+      <div className="bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center opacity-60 border border-slate-700 gap-2 h-32">
+        <span className="text-2xl opacity-50 filter grayscale">🔒</span>
+        <span className="text-slate-400 font-mono text-sm tracking-widest">SYSTEM LOCKED</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative bg-slate-800 rounded-xl p-5 md:p-6 shadow-sm border transition-all duration-500 overflow-hidden ${isCompleted ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-slate-700 hover:border-cyan-600'} ${error ? 'animate-shake border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]' : ''}`}>
+      {isCompleted && (
+        <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-900/40 rounded-bl-full flex items-start justify-end p-2 z-0">
+          <span className="text-2xl" title="クリア！">✨</span>
+        </div>
+      )}
+      
+      <div className="relative z-10">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-start gap-3 w-full">
+            <span className="bg-cyan-950 text-cyan-400 border border-cyan-800 px-2 py-1 rounded text-sm mt-1 flex-shrink-0 font-bold font-mono">SYS.Q</span>
+            {(() => {
+              // 2進数の足し算・引き算の式を正規表現で探して筆算UIに変換
+              const match = quiz.q.match(/^([01]+)\s*([+-])\s*([01]+)(.*)$/);
+              if (match) {
+                const num1 = match[1];
+                const op = match[2];
+                const num2 = match[3];
+                const note = match[4].trim();
+                return (
+                  <div className="flex flex-col">
+                    <div className="flex flex-col text-2xl md:text-3xl font-mono bg-slate-900 p-4 md:p-5 rounded-lg border border-slate-700 shadow-inner w-fit relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-20"></div>
+                      <div className="text-right tracking-[0.4em] font-black text-cyan-400 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">{num1}</div>
+                      <div className="flex items-end justify-between border-b-[2px] border-slate-600 pb-1 mb-2">
+                        <span className="text-slate-500 mr-6 text-xl font-bold">{op}</span>
+                        <span className="text-right tracking-[0.4em] font-black text-cyan-400 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">{num2}</span>
+                      </div>
+                    </div>
+                    {note && <div className="text-sm font-mono text-slate-400 mt-2 ml-1 opacity-80">{note.replace(/^\((.*)\)$/, '$1')}</div>}
+                  </div>
+                );
+              }
+              return <h3 className="font-bold text-lg md:text-xl text-slate-200 font-mono mt-0.5">{quiz.q}</h3>;
+            })()}
+          </div>
+          {isCompleted && (
+             <span className="bg-emerald-500/20 border border-emerald-500 text-emerald-400 px-3 py-1 rounded-sm text-xs font-black tracking-widest uppercase shadow-[0_0_10px_rgba(16,185,129,0.3)] absolute right-0 top-0">SUCCESS</span>
+          )}
+        </div>
+        
+        {!isCompleted ? (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input 
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value.replace(/[^0-9-]/g, ''))} 
+                className={`flex-1 bg-slate-950 border rounded-lg px-4 py-3 font-mono text-xl outline-none transition-all focus:ring-2 ${error ? 'border-rose-500 focus:ring-rose-900 text-rose-400' : 'border-slate-600 focus:border-cyan-400 focus:ring-cyan-900 text-cyan-300'}`}
+                placeholder="INPUT DATA..."
+                autoComplete="off"
+              />
+              <button 
+                type="submit" 
+                className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black font-mono tracking-widest py-3 px-8 rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(6,182,212,0.4)] whitespace-nowrap"
+              >
+                EXECUTE
+              </button>
+            </div>
+            
+            <button 
+              type="button" 
+              onClick={() => setShowHint(!showHint)}
+              className="text-xs font-mono text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1 w-fit mt-1 bg-fuchsia-950/30 border border-fuchsia-900/50 hover:bg-fuchsia-900/50 px-3 py-1.5 rounded transition-colors"
+            >
+              <span>[?]</span> REQ_HINT: MEI_AI
+            </button>
+            
+            {showHint && (
+              <div className="mt-2 bg-slate-900 border border-fuchsia-800 rounded-lg p-4 flex gap-3 animate-fade-in text-sm text-slate-300 shadow-inner relative overflow-hidden">
+                 <div className="absolute top-0 left-0 w-1 h-full bg-fuchsia-500"></div>
+                 <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-lg pb-1">
+                    <MeiIcon />
+                 </div>
+                 <p className="leading-relaxed font-medium">{quiz.hint}</p>
+              </div>
+            )}
+          </form>
+        ) : (
+          <div className="bg-emerald-950/40 border-l-4 border-emerald-500 p-4 rounded-r-lg mt-2 animate-fade-in relative overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-emerald-500/10 to-transparent"></div>
+            <span className="text-emerald-400 font-mono text-xs block mb-1 tracking-widest">VERIFIED</span>
+            <span className="text-emerald-300 font-mono font-bold text-xl drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">{quiz.a}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ChatArea = ({ dialogs }) => {
+  return (
+    <div className="bg-slate-800/60 backdrop-blur-md rounded-2xl shadow-xl border border-slate-700/80 p-4 md:p-6 flex flex-col gap-5 h-full relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSJub25lIiAvPgo8cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDUpIiAvPgo8L3N2Zz4=')] opacity-50"></div>
+      
+      <h2 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest text-center border-b border-slate-700 pb-3 mb-2 relative z-10 flex items-center justify-center gap-2">
+        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+        LIVE_LECTURE_FEED
+      </h2>
+       
+       <div className="relative z-10 flex flex-col gap-5">
+       {dialogs.map((d, i) => (
+         <div key={i} className={`flex gap-3 md:gap-4 animate-fade-in-up ${d.speaker === '先生' ? '' : 'flex-row-reverse'}`} style={{ animationDelay: `${i * 150}ms` }}>
+           <div className="flex-shrink-0">
+             {d.speaker === '先生' ? <SenseiIcon /> : <MeiIcon />}
+           </div>
+           <div className={`p-4 rounded-xl max-w-[85%] md:max-w-[75%] border relative ${d.speaker === '先生' ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-50 rounded-tl-none' : 'bg-fuchsia-950/40 border-fuchsia-800/60 text-fuchsia-50 rounded-tr-none'}`}>
+             <p className={`font-mono font-bold text-[10px] mb-1.5 opacity-70 flex items-center gap-1 tracking-widest ${d.speaker === '先生' ? 'text-cyan-400' : 'text-fuchsia-400'}`}>
+               ID: {d.speaker === '先生' ? 'INSTRUCTOR' : 'STUDENT_MEI'}
+             </p>
+             <p className="leading-relaxed font-medium text-[15px]">{d.text}</p>
+           </div>
+         </div>
+       ))}
+       </div>
+    </div>
+  );
+};
+
+export default function BinaryLearningApp() {
+  const [progress, setProgress] = useState({
+    xp: 0,
+    baseXp: 0,
+    bonusXp: 0,
+    currentSectionIndex: 0,
+    completedQuizzes: [],
+    completedSections: [],
+    userName: '',
+    sectionStats: {}
+  });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [combo, setCombo] = useState(0);
+  const [showComboAnim, setShowComboAnim] = useState(false);
+  const [xpGainedAnim, setXpGainedAnim] = useState(0);
+
+  // Authentication & Firestore Init
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+    const login = async () => {
+      try {
+        if (initialAuthToken) {
+          await signInWithCustomToken(auth, initialAuthToken);
+        } else {
+          await signInAnonymously(auth);
+        }
+        setUser(auth.currentUser);
+      } catch (e) {
+        console.error("Auth error", e);
+        setLoading(false);
+      }
+    };
+    login();
+  }, []);
+
+  useEffect(() => {
+    if (!user || !db) return;
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'progress', 'main');
+    
+    const unsubscribe = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (!data.sectionStats) data.sectionStats = {};
+        if (!data.userName) data.userName = '';
+        if (data.baseXp === undefined) data.baseXp = 0;
+        if (data.bonusXp === undefined) data.bonusXp = 0;
+        setProgress(data);
+      } else {
+        const initData = { xp: 0, baseXp: 0, bonusXp: 0, currentSectionIndex: 0, completedQuizzes: [], completedSections: [], userName: '', sectionStats: {} };
+        setDoc(docRef, initData);
+        setProgress(initData);
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore sync error", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const updateProgress = async (newProgress) => {
+    const updated = { ...progress, ...newProgress };
+    setProgress(updated);
+    
+    if (user && db) {
+      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'progress', 'main');
+      await setDoc(docRef, updated, { merge: true });
+    }
+  };
+
+  const handleCorrect = (quizId) => {
+    const newCombo = combo + 1;
+    setCombo(newCombo);
+    
+    const bonus = newCombo > 1 ? newCombo * 5 : 0;
+    const baseGained = 10;
+    const xpGained = baseGained + bonus;
+    
+    setXpGainedAnim(xpGained);
+    setShowComboAnim(true);
+    setTimeout(() => setShowComboAnim(false), 1500);
+
+    const sectionId = COURSE_DATA[progress.currentSectionIndex].id;
+    const currentStats = progress.sectionStats || {};
+    const secStats = currentStats[sectionId] || { correct: 0, mistakes: 0 };
+    
+    let newCompleted = progress.completedQuizzes;
+    let newStats = { ...currentStats };
+    
+    if (!progress.completedQuizzes.includes(quizId)) {
+       newCompleted = [...progress.completedQuizzes, quizId];
+       newStats[sectionId] = { ...secStats, correct: secStats.correct + 1 };
+    }
+
+    updateProgress({
+      xp: progress.xp + xpGained,
+      baseXp: (progress.baseXp || 0) + baseGained,
+      bonusXp: (progress.bonusXp || 0) + bonus,
+      completedQuizzes: newCompleted,
+      sectionStats: newStats
+    });
+  };
+
+  const handleIncorrect = () => {
+    setCombo(0);
+    const sectionId = COURSE_DATA[progress.currentSectionIndex].id;
+    const currentStats = progress.sectionStats || {};
+    const secStats = currentStats[sectionId] || { correct: 0, mistakes: 0 };
+    
+    updateProgress({
+      sectionStats: {
+        ...currentStats,
+        [sectionId]: { ...secStats, mistakes: secStats.mistakes + 1 }
+      }
+    });
+  };
+
+  const currentSection = COURSE_DATA[progress.currentSectionIndex];
+  
+  const isSectionComplete = currentSection?.quizzes.length === 0 || 
+    currentSection?.quizzes.every(q => progress.completedQuizzes.includes(q.id));
+
+  const handleNextSection = () => {
+    const nextIdx = progress.currentSectionIndex + 1;
+    if (nextIdx < COURSE_DATA.length) {
+       updateProgress({
+         currentSectionIndex: nextIdx,
+         completedSections: [...progress.completedSections, currentSection.id]
+       });
+       setCombo(0);
+       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 font-sans">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+           <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(6,182,212,0.5)]"></div>
+           <p className="text-cyan-400 font-mono font-bold tracking-[0.3em] uppercase">SYSTEM LOADING...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const level = Math.floor(progress.xp / 100) + 1;
+  const xpToNext = 100 - (progress.xp % 100);
+  const progressPercent = ((progress.xp % 100) / 100) * 100;
+
+  if (!progress.userName) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 font-sans p-4 relative overflow-hidden">
+        {/* 背景のグリッド装飾 */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik0gNDAgMCBMIDAgMCAwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMzAsNDEsNTksMC40KSIgc3Ryb2tlLXdpZHRoPSIxIiAvPgo8L3N2Zz4=')] opacity-50"></div>
+        
+        <div className="bg-slate-900 p-8 md:p-10 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.2)] border border-cyan-900 max-w-md w-full animate-fade-in-up text-center relative z-10">
+          <div className="flex justify-center mb-6 relative">
+            <div className="absolute inset-0 bg-cyan-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
+            <SenseiIcon />
+          </div>
+          <h1 className="text-2xl font-black text-slate-100 mb-2 font-mono tracking-wide">BINARY<span className="text-cyan-500">_MASTER</span></h1>
+          <p className="text-slate-400 mb-8 text-sm font-mono tracking-widest uppercase">Enter User Identity</p>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const name = e.target.username.value.trim();
+            if (name) updateProgress({ userName: name });
+          }}>
+            <input 
+              name="username"
+              type="text" 
+              maxLength="15"
+              placeholder="YOUR NAME..."
+              className="w-full bg-slate-950 border-2 border-slate-700 rounded-lg px-4 py-4 text-lg font-mono text-cyan-300 font-bold outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all mb-6 text-center placeholder-slate-600"
+              required
+              autoComplete="off"
+            />
+            <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-4 px-8 rounded-lg transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)] font-mono tracking-widest text-lg">
+              INITIALIZE
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <style>{`
+        /* 印刷・PDF保存用のスタイル（白背景にリセット） */
+        @media print {
+          body * { visibility: hidden; }
+          #certificate-area, #certificate-area * { visibility: visible; color: #1e293b !important; }
+          #certificate-area { position: absolute; left: 0; top: 0; width: 100%; height: auto; margin: 0; padding: 40px; box-sizing: border-box; background: white !important; border: 2px solid #fbbf24 !important; box-shadow: none !important; }
+          .print-invert { filter: invert(1) hue-rotate(180deg); }
+          .no-print { display: none !important; }
+          @page { margin: 0; size: A4 portrait; }
+        }
+
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-6px); }
+          50% { transform: translateX(6px); }
+          75% { transform: translateX(-6px); }
+        }
+        .animate-shake { animation: shake 0.4s ease-in-out; }
+        
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; opacity: 0; }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        @keyframes bounceShort {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20%); }
+        }
+        .animate-bounce-short { animation: bounceShort 0.5s ease-in-out 2; }
+        
+        @keyframes floatUp {
+          0% { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+        }
+        .animate-float-up { animation: floatUp 1s ease-out forwards; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #06b6d4; }
+      `}</style>
+
+      <div className="min-h-screen bg-slate-950 flex flex-col font-sans text-slate-200 selection:bg-cyan-900">
+        
+        {/* Header */}
+        <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 shadow-sm relative overflow-hidden">
+          <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50"></div>
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <h1 className="font-black text-xl md:text-2xl tracking-widest font-mono text-cyan-500 hidden sm:block drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
+              BIN<span className="text-slate-100">_MASTER</span>
+            </h1>
+            
+            <div className="flex items-center gap-4 sm:gap-6 ml-auto w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-center gap-4">
+                <UserAvatar level={level} />
+                <div className="flex flex-col min-w-[120px]">
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="font-mono font-bold text-slate-300 truncate max-w-[100px]" title={progress.userName}>usr:{progress.userName}</span>
+                    <span className="text-[10px] font-mono text-cyan-600 font-bold">XP:{progress.xp} / NX:{xpToNext}</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+                    <div 
+                      className="bg-cyan-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(6,182,212,0.8)]" 
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Combo Display */}
+              <div className="relative flex items-center pl-4 border-l border-slate-800">
+                <div className={`font-black text-lg font-mono italic transition-all ${combo > 1 ? 'text-rose-500 scale-110 drop-shadow-[0_0_10px_rgba(244,63,94,0.6)]' : 'text-slate-700'}`}>
+                  {combo > 1 ? `${combo}_COMBO!` : '0_COMBO'}
+                </div>
+                {/* Floating XP Animation */}
+                {showComboAnim && (
+                  <div className="absolute -top-6 right-0 text-cyan-400 font-mono font-bold text-lg animate-float-up pointer-events-none drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">
+                    +{xpGainedAnim}XP
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Section Progress Bar */}
+          <div className="h-[2px] bg-slate-900">
+             <div 
+               className="h-full bg-cyan-500 transition-all duration-500 shadow-[0_0_10px_rgba(6,182,212,1)]"
+               style={{ width: `${((progress.currentSectionIndex + 1) / COURSE_DATA.length) * 100}%` }}
+             ></div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full p-4 md:p-6 gap-6 md:gap-8 overflow-hidden h-[calc(100vh-68px)]">
+          
+          {/* Left Column: Lecture / Chat */}
+          <section className="w-full md:w-5/12 lg:w-1/2 flex flex-col h-[40vh] md:h-full flex-shrink-0">
+             <div className="bg-slate-900/50 rounded-2xl p-1 pb-0 shadow-inner h-full flex flex-col overflow-hidden border border-slate-800 relative">
+               <div className="px-5 py-4 pb-2 relative z-10">
+                 <span className="text-[10px] font-mono text-cyan-600 uppercase tracking-[0.2em] block mb-1">
+                   [ SECTION 0{progress.currentSectionIndex + 1} / 0{COURSE_DATA.length} ]
+                 </span>
+                 <h2 className="text-xl md:text-2xl font-black text-slate-100">{currentSection.title}</h2>
+               </div>
+               <div className="flex-1 overflow-y-auto p-3 pb-6 z-10">
+                 <ChatArea dialogs={currentSection.dialogs} />
+               </div>
+             </div>
+          </section>
+
+          {/* Right Column: Quizzes */}
+          <section className="w-full md:w-7/12 lg:w-1/2 flex flex-col h-[55vh] md:h-full overflow-y-auto pb-10 scroll-smooth pr-1 md:pr-2">
+             <div className="flex flex-col gap-5">
+               {currentSection.quizzes.length > 0 ? (
+                 <>
+                   <h2 className="text-lg font-bold text-slate-400 flex items-center gap-2 mb-2 sticky top-0 bg-slate-950/90 backdrop-blur py-2 z-20 font-mono border-b border-slate-800">
+                     <span className="bg-slate-800 text-cyan-500 px-2.5 py-0.5 rounded text-xs border border-cyan-900">EXE</span>
+                     TRAINING_PROTOCOL
+                   </h2>
+                   {currentSection.quizzes.map((quiz, idx) => {
+                      const isCompleted = progress.completedQuizzes.includes(quiz.id);
+                      const prevQuizId = idx > 0 ? currentSection.quizzes[idx-1].id : null;
+                      const isUnlocked = idx === 0 || progress.completedQuizzes.includes(prevQuizId) || isCompleted;
+
+                      return (
+                        <QuizItem 
+                          key={quiz.id}
+                          quiz={quiz}
+                          isCompleted={isCompleted}
+                          isUnlocked={isUnlocked}
+                          onCorrect={() => handleCorrect(quiz.id)}
+                          onIncorrect={handleIncorrect}
+                          combo={combo}
+                        />
+                      );
+                   })}
+                 </>
+               ) : (
+                 <div className="h-full flex flex-col items-center justify-center p-10 bg-slate-900/50 rounded-2xl border border-slate-800 shadow-sm text-center">
+                    <div className="text-6xl mb-4 opacity-50 filter grayscale">📖</div>
+                    <h3 className="font-bold text-xl text-slate-300 mb-2 font-mono">STANDBY...</h3>
+                    <p className="text-slate-500 mb-6 text-sm">Read the lecture feed and proceed to next phase.</p>
+                 </div>
+               )}
+               
+               {/* Next Section Button */}
+               {isSectionComplete && progress.currentSectionIndex < COURSE_DATA.length - 1 && (
+                 <div className="mt-8 flex justify-center animate-fade-in-up relative">
+                   <div className="absolute inset-0 bg-cyan-500 rounded-lg blur-lg opacity-20"></div>
+                   <button 
+                     onClick={handleNextSection}
+                     className="relative inline-flex items-center justify-center px-8 py-4 font-black font-mono tracking-widest text-slate-950 transition-all duration-200 bg-cyan-500 rounded-lg hover:bg-cyan-400 w-full sm:w-auto hover:shadow-[0_0_20px_rgba(6,182,212,0.6)]"
+                   >
+                     <span>NEXT_PHASE</span>
+                     <svg className="w-5 h-5 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="square" strokeLinejoin="miter" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                   </button>
+                 </div>
+               )}
+               
+               {isSectionComplete && progress.currentSectionIndex === COURSE_DATA.length - 1 && (
+                 <div id="certificate-area" className="mt-8 flex flex-col p-8 md:p-10 bg-slate-900 rounded-2xl border border-amber-500 text-center animate-fade-in-up shadow-[0_0_30px_rgba(245,158,11,0.15)] relative overflow-hidden">
+                   {/* 装飾 */}
+                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
+                   
+                   <span className="text-6xl mb-4 block animate-bounce-short">🏆</span>
+                   <h3 className="font-black text-3xl text-amber-500 mb-2 tracking-[0.2em] font-mono drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">CERTIFICATE</h3>
+                   <p className="text-xl font-mono text-slate-200 mt-4 mb-2 border-b border-slate-700 pb-2 inline-block w-fit mx-auto">usr: {progress.userName}</p>
+                   <p className="text-slate-400 font-medium mb-8 leading-relaxed text-sm">
+                     System recognizes the completion of all binary operation protocols.<br/>
+                     Excellent computational skills demonstrated.
+                   </p>
+
+                   {/* 集計表 */}
+                   <div className="bg-slate-800/80 rounded-lg p-4 md:p-6 border border-slate-700 mb-6 text-left w-full max-w-md mx-auto shadow-inner">
+                     <h4 className="font-mono font-bold text-slate-300 mb-3 text-center border-b border-slate-700 pb-2 tracking-widest">LOG_DATA</h4>
+                     <table className="w-full text-sm font-mono">
+                       <thead>
+                         <tr className="text-slate-500 border-b border-slate-700">
+                           <th className="py-2 font-medium text-left">PHASE</th>
+                           <th className="py-2 font-medium text-center">SUCCESS</th>
+                           <th className="py-2 font-medium text-center text-rose-500">ERROR</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {COURSE_DATA.filter(sec => sec.quizzes.length > 0).map(sec => {
+                           const stats = progress.sectionStats?.[sec.id] || { correct: 0, mistakes: 0 };
+                           return (
+                             <tr key={sec.id} className="border-b border-slate-700/50 last:border-0">
+                               <td className="py-3 text-slate-300 truncate max-w-[150px]">{sec.title.split('.')[0]}</td>
+                               <td className="py-3 text-center font-bold text-emerald-400">{stats.correct}/{sec.quizzes.length}</td>
+                               <td className="py-3 text-center font-bold text-rose-500">{stats.mistakes}</td>
+                             </tr>
+                           );
+                         })}
+                       </tbody>
+                     </table>
+                   </div>
+                   
+                   {/* スコア内訳 */}
+                   <div className="bg-slate-800 rounded-lg p-4 md:p-6 border border-amber-900/50 mb-8 text-left w-full max-w-md mx-auto shadow-inner relative">
+                     <div className="absolute left-0 top-0 h-full w-1 bg-amber-500"></div>
+                     <h4 className="font-mono font-bold text-amber-500 mb-3 text-center border-b border-slate-700 pb-2 tracking-widest">FINAL_SCORE</h4>
+                     <div className="flex justify-between items-center mb-2 font-mono text-sm">
+                       <span className="text-slate-400">BASE_XP</span>
+                       <span className="font-bold text-slate-200">{progress.baseXp || 0}</span>
+                     </div>
+                     <div className="flex justify-between items-center mb-4 font-mono text-sm">
+                       <span className="text-slate-400">COMBO_BONUS</span>
+                       <span className="font-bold text-amber-400">+{progress.bonusXp || 0}</span>
+                     </div>
+                     <div className="flex justify-between items-center border-t border-slate-700 pt-3">
+                       <span className="text-amber-500 font-bold font-mono">TOTAL_XP</span>
+                       <span className="font-black text-2xl text-amber-400 drop-shadow-[0_0_5px_rgba(245,158,11,0.5)] font-mono">{progress.xp} <span className="text-sm font-medium text-slate-500">(Lv.{level})</span></span>
+                     </div>
+                   </div>
+
+                   <button 
+                     onClick={() => window.print()}
+                     className="no-print mt-2 inline-flex items-center justify-center px-6 py-3 font-bold font-mono tracking-widest text-slate-900 transition-all duration-200 bg-amber-500 rounded-lg hover:bg-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.6)] w-full sm:w-auto mx-auto gap-2"
+                   >
+                     <span>[ PRINT_CERTIFICATE ]</span>
+                   </button>
+                 </div>
+               )}
+             </div>
+          </section>
+
+        </main>
+      </div>
+    </>
+  );
+}  
+      // 最後にアプリを画面にレンダリングする処理を書きます
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<BinaryLearningApp />);
+    </script>
+  </body>
+</html>
