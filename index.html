@@ -1,3 +1,18 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>2進法計算マスター</title>
+    <!-- React, ReactDOM, Babel, TailwindCSS の読み込み -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
@@ -724,4 +739,10 @@ export default function BinaryLearningApp() {
       </div>
     </>
   );
-}
+}  
+      // 最後にアプリを画面にレンダリングする処理を書きます
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<BinaryLearningApp />);
+    </script>
+  </body>
+</html>
